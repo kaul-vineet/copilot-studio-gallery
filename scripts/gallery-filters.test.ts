@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { collectCategories } from "../src/lib/catalog";
 import { parseSortMode } from "../src/lib/discovery";
 import {
   cloneState, emptyState, filterParams, isFiltered, matches, sameState, stateFromUrl,
@@ -62,6 +63,21 @@ test("retains valid selections with no matches in the Microsoft gallery", () => 
   assert.ok(sameState(stateFromUrl(filterParams(carried, "newest"), labels), state));
 });
 
+test("discovers Agent Building before submissions exist and round-trips its filter", () => {
+  const categories = collectCategories([]);
+  assert.equal(new Map(categories).get("Agent Building"), 0);
+  const catalogLabels: FacetLabels = {
+    ...labels,
+    categories: new Map(categories.map(([category]) => [category, category])),
+  };
+  const state = stateFromUrl(new URLSearchParams("category=Agent%20Building"), catalogLabels);
+  assert.deepEqual([...state.categories], ["Agent Building"]);
+  assert.equal(matches({ ...microsoft, categories: ["Agent Building"] }, state), true);
+  assert.equal(matches(microsoft, state), false);
+  assert.equal(filterParams(state, "newest").get("category"), "Agent Building");
+  assert.ok(sameState(stateFromUrl(new URLSearchParams(filterParams(state, "newest").toString()), catalogLabels), state));
+});
+
 test("ignores invalid values without dropping valid selections", () => {
   const state = stateFromUrl(new URLSearchParams({
     type: "unknown",
@@ -80,7 +96,7 @@ test("ignores invalid values without dropping valid selections", () => {
 test("normalizes legacy type links while preserving their remaining filters", () => {
   const legacy = stateFromUrl(new URLSearchParams("makeup=Workflows&contains=skill"), labels);
   assert.equal(legacy.type, "workflows");
-  assert.equal(filterParams(legacy, "newest").toString(), "type=workflows&contains=skill");
+  assert.equal(filterParams(legacy, "featured").toString(), "type=workflows&contains=skill");
   const current = stateFromUrl(new URLSearchParams("type=agents&makeup=Workflows"), labels);
   assert.equal(current.type, "agents");
 });
@@ -125,7 +141,8 @@ test("draft changes do not mutate applied selections", () => {
 test("cleared filters omit defaults and keep a chosen sort order", () => {
   const state = emptyState();
   assert.equal(isFiltered(state), false);
-  assert.equal(filterParams(state, "newest").toString(), "");
+  assert.equal(filterParams(state, "featured").toString(), "");
+  assert.equal(filterParams(state, "newest").toString(), "sort=newest");
   assert.equal(filterParams(state, "name").toString(), "sort=name");
   state.contains.add("skill");
   assert.equal(isFiltered(state), true);

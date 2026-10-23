@@ -47,11 +47,25 @@ test("isDemo matches the demo tag case-insensitively", () => {
   assert.equal(isDemo([]), false);
 });
 
-test("normalizes absent, invalid, and legacy sort modes to newest", () => {
+test("normalizes absent and invalid sort modes to featured", () => {
   assert.equal(parseSortMode("name"), "name");
-  for (const value of ["newest", "featured", "invalid", "", null, undefined]) {
-    assert.equal(parseSortMode(value), "newest");
+  assert.equal(parseSortMode("newest"), "newest");
+  for (const value of ["featured", "invalid", "", null, undefined]) {
+    assert.equal(parseSortMode(value), "featured");
   }
+});
+
+test("featured sorting follows the launch order, then newest", () => {
+  const solutions = [
+    { name: "Unranked old", createdAt: "2026-01-01" },
+    { name: "Second", rank: 1, createdAt: "2026-01-01" },
+    { name: "Unranked new", createdAt: "2026-09-01" },
+    { name: "First", rank: 0 },
+  ];
+  assert.deepEqual(
+    [...solutions].sort((a, b) => compareSolutionOrder(a, b, "featured")).map((solution) => solution.name),
+    ["First", "Second", "Unranked new", "Unranked old"],
+  );
 });
 
 test("Contains uses positive inventory counts and keeps MCP servers separate from tools", () => {
@@ -119,4 +133,11 @@ test("counts MCP servers shipped as connectors once, without double-counting one
   assert.deepEqual(sharedMcpServers(data).map((connector) => connector.name), ["Warehouse MCP"]);
   assert.equal(solutionInventory(data).mcpServers, 2);
   assert.equal(solutionInventory({ ...data, connectors: undefined }).mcpServers, 1);
+});
+
+test("hackathon badges list the best award first", async () => {
+  const { earnedHackathonBadges } = await import("../src/lib/hackathon");
+  const solution = (name: string, hackathon?: "hacker" | "winner") => ({ data: { name, hackathon } });
+  const badges = earnedHackathonBadges([solution("B", "hacker"), solution("None"), solution("C", "winner"), solution("A", "hacker")]);
+  assert.deepEqual(badges.map(({ badge, solution }) => `${badge.award}:${solution.data.name}`), ["winner:C", "hacker:A", "hacker:B"]);
 });
